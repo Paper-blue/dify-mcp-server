@@ -875,6 +875,67 @@ export class DifyClient {
 		return this.request<WorkflowRunCount>(url);
 	}
 
+	// --- Workspace Members ---
+
+	async listWorkspaceMembers(page = 1, limit = 30): Promise<Record<string, unknown>> {
+		return this.request<Record<string, unknown>>(
+			`/workspaces/current/members?page=${page}&limit=${limit}`,
+		);
+	}
+
+	async inviteMember(
+		email: string,
+		role: "normal" | "editor" | "admin",
+		language = "en-US",
+	): Promise<Record<string, unknown>> {
+		return this.request<Record<string, unknown>>("/workspaces/current/members/invite-email", {
+			method: "POST",
+			body: JSON.stringify({ emails: [{ email, role }], language }),
+		});
+	}
+
+	async updateMemberRole(
+		memberId: string,
+		role: "normal" | "editor" | "admin",
+	): Promise<{ result: string }> {
+		return this.request<{ result: string }>(`/workspaces/current/members/${memberId}`, {
+			method: "PUT",
+			body: JSON.stringify({ role }),
+		});
+	}
+
+	async removeMember(memberId: string): Promise<{ result: string }> {
+		return this.request<{ result: string }>(`/workspaces/current/members/${memberId}`, {
+			method: "DELETE",
+		});
+	}
+
+	async configureModelProvider(
+		provider: string,
+		credentials: Record<string, unknown>,
+	): Promise<{ result: string }> {
+		return this.request<{ result: string }>(
+			`/workspaces/current/model-providers/${provider}/credentials`,
+			{
+				method: "POST",
+				body: JSON.stringify(credentials),
+			},
+		);
+	}
+
+	async testModelProvider(
+		provider: string,
+		credentials: Record<string, unknown>,
+	): Promise<{ result: string }> {
+		return this.request<{ result: string }>(
+			`/workspaces/current/model-providers/${provider}/credentials/validate`,
+			{
+				method: "POST",
+				body: JSON.stringify(credentials),
+			},
+		);
+	}
+
 	// --- listApps with filters ---
 
 	async listAppsFiltered(

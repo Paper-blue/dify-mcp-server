@@ -4,6 +4,8 @@ import { registerAppTools } from "./apps.js";
 import { registerAppDslTools } from "./app-dsl.js";
 import { registerAppAccessTools } from "./app-access.js";
 import { registerConversationTools } from "./conversations.js";
+import { registerWorkspaceMemberTools } from "./workspace-members.js";
+import { registerModelProviderTools } from "./model-providers.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerMcpServerTools } from "./mcp-servers.js";
 import { registerModelTools } from "./models.js";
@@ -30,4 +32,6 @@ export const registerTools = (server: McpServer, client: DifyClient) => {
 	registerMcpServerTools(server, client);
 	registerTagTools(server, client);
 	registerConversationTools(server, client);
+	registerWorkspaceMemberTools(server, client);
+	registerModelProviderTools(server, client);
 };
