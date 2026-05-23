@@ -49,19 +49,5 @@ export const registerWorkflowTools = (server: McpServer, client: DifyClient) => 
 		},
 	);
 
-	server.registerTool(
-		"publish_workflow",
-		{
-			description: "Publish the draft workflow to make it live",
-			inputSchema: { app_id: z.string().describe("Application ID") },
-		},
-		async ({ app_id }) => {
-			try {
-				const result = await client.publishWorkflow(app_id);
-				return { content: [{ type: "text", text: `Published: ${result.result}` }] };
-			} catch (e) {
-				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
-			}
-		},
-	);
+
 };
