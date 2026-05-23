@@ -8,10 +8,18 @@ import { registerModelTools } from "./models.js";
 import { registerPluginTools } from "./plugins.js";
 import { registerTagTools } from "./tags.js";
 import { registerWorkflowTools } from "./workflow.js";
+import { registerWorkflowDebugTools } from "./workflow-debug.js";
+import { registerWorkflowRunTools } from "./workflow-runs.js";
+import { registerWorkflowVersionTools } from "./workflow-versions.js";
+import { registerWorkflowTriggerTools } from "./workflow-triggers.js";
 
 export const registerTools = (server: McpServer, client: DifyClient) => {
 	registerAppTools(server, client);
 	registerWorkflowTools(server, client);
+	registerWorkflowDebugTools(server, client);
+	registerWorkflowRunTools(server, client);
+	registerWorkflowVersionTools(server, client);
+	registerWorkflowTriggerTools(server, client);
 	registerKnowledgeTools(server, client);
 	registerModelTools(server, client);
 	registerPluginTools(server, client);

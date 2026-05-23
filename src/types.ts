@@ -217,3 +217,96 @@ export interface SegmentListResponse {
 	page: number;
 	limit: number;
 }
+
+// --- Workflow Run ---
+
+export interface WorkflowRun {
+	id: string;
+	workflow_id: string;
+	status: "running" | "succeeded" | "failed" | "stopped" | "partial-succeeded";
+	inputs: Record<string, unknown>;
+	outputs: Record<string, unknown> | null;
+	error: string | null;
+	elapsed_time: number;
+	total_tokens: number;
+	total_steps: number;
+	triggered_from: string;
+	created_at: number;
+	finished_at: number | null;
+}
+
+export interface WorkflowRunListResponse {
+	data: WorkflowRun[];
+	has_more: boolean;
+	total: number;
+	page: number;
+	limit: number;
+}
+
+export interface WorkflowNodeExecution {
+	id: string;
+	node_id: string;
+	node_type: string;
+	title: string;
+	index: number;
+	predecessor_node_id: string | null;
+	inputs: Record<string, unknown> | null;
+	outputs: Record<string, unknown> | null;
+	status: "running" | "succeeded" | "failed" | "stopped";
+	error: string | null;
+	elapsed_time: number;
+	execution_metadata: Record<string, unknown> | null;
+	created_at: number;
+	finished_at: number | null;
+}
+
+export interface WorkflowNodeExecutionListResponse {
+	data: WorkflowNodeExecution[];
+}
+
+export interface WorkflowNodeRunResult {
+	node_id: string;
+	node_type: string;
+	title: string;
+	inputs: Record<string, unknown>;
+	outputs: Record<string, unknown>;
+	status: string;
+	error: string | null;
+	elapsed_time: number;
+	execution_metadata: Record<string, unknown>;
+}
+
+// --- Workflow Version ---
+
+export interface WorkflowVersion {
+	id: string;
+	graph: Record<string, unknown>;
+	features: Record<string, unknown>;
+	hash: string;
+	version: number;
+	marked_name: string;
+	marked_comment: string;
+	created_at: string;
+	updated_at: string;
+}
+
+export interface WorkflowVersionListResponse {
+	data: WorkflowVersion[];
+	has_more: boolean;
+	total: number;
+	page: number;
+	limit: number;
+}
+
+// --- Trigger ---
+
+export interface WorkflowTrigger {
+	id: string;
+	type: string;
+	enabled: boolean;
+	created_at: string;
+}
+
+export interface WorkflowTriggerListResponse {
+	data: WorkflowTrigger[];
+}

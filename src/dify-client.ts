@@ -25,6 +25,15 @@ import type {
 	SegmentListResponse,
 	Tag,
 	Workflow,
+	WorkflowNodeExecution,
+	WorkflowNodeExecutionListResponse,
+	WorkflowNodeRunResult,
+	WorkflowRun,
+	WorkflowRunListResponse,
+	WorkflowTrigger,
+	WorkflowTriggerListResponse,
+	WorkflowVersion,
+	WorkflowVersionListResponse,
 } from "./types.js";
 
 // --- Client ---
@@ -633,5 +642,167 @@ export class DifyClient {
 
 	async getMessage(appId: string, messageId: string): Promise<Message> {
 		return this.request<Message>(`/apps/${appId}/messages/${messageId}`);
+	}
+
+	// --- Workflow Debug ---
+
+	async runDraftWorkflow(
+		appId: string,
+		inputs: Record<string, unknown> = {},
+	): Promise<ReadableStream<Uint8Array>> {
+		if (!this.authenticated) await this.login();
+		const headers: Record<string, string> = {
+			"Content-Type": "application/json",
+			Cookie: this.getCookieHeader(),
+		};
+		if (this.csrfToken) headers["X-CSRF-Token"] = this.csrfToken;
+		const res = await fetch(`${this.baseUrl}/console/api/apps/${appId}/workflows/draft/run`, {
+			method: "POST",
+			headers,
+			body: JSON.stringify({ inputs, files: [] }),
+		});
+		if (!res.ok) throw new Error(`Dify API ${res.status}: ${await res.text()}`);
+		if (!res.body) throw new Error("No response body");
+		return res.body;
+	}
+
+	async runDraftWorkflowNode(
+		appId: string,
+		nodeId: string,
+		inputs: Record<string, unknown> = {},
+	): Promise<WorkflowNodeRunResult> {
+		return this.request<WorkflowNodeRunResult>(
+			`/apps/${appId}/workflows/draft/nodes/${nodeId}/run`,
+			{
+				method: "POST",
+				body: JSON.stringify({ inputs, query: "", files: [] }),
+			},
+		);
+	}
+
+	async getNodeLastRun(appId: string, nodeId: string): Promise<WorkflowNodeExecution> {
+		return this.request<WorkflowNodeExecution>(
+			`/apps/${appId}/workflows/draft/nodes/${nodeId}/last-run`,
+		);
+	}
+
+	async stopWorkflowTask(appId: string, taskId: string): Promise<{ result: string }> {
+		return this.request<{ result: string }>(
+			`/apps/${appId}/workflow-runs/tasks/${taskId}/stop`,
+			{ method: "POST" },
+		);
+	}
+
+	// --- Workflow Runs (History & Logs) ---
+
+	async listWorkflowRuns(
+		appId: string,
+		limit = 20,
+		status?: string,
+		lastId?: string,
+	): Promise<WorkflowRunListResponse> {
+		let url = `/apps/${appId}/workflow-runs?limit=${limit}`;
+		if (status) url += `&status=${status}`;
+		if (lastId) url += `&last_id=${lastId}`;
+		return this.request<WorkflowRunListResponse>(url);
+	}
+
+	async getWorkflowRun(appId: string, runId: string): Promise<WorkflowRun> {
+		return this.request<WorkflowRun>(`/apps/${appId}/workflow-runs/${runId}`);
+	}
+
+	async getWorkflowRunNodeExecutions(
+		appId: string,
+		runId: string,
+	): Promise<WorkflowNodeExecutionListResponse> {
+		return this.request<WorkflowNodeExecutionListResponse>(
+			`/apps/${appId}/workflow-runs/${runId}/node-executions`,
+		);
+	}
+
+	// --- Workflow Versions ---
+
+	async listWorkflowVersions(
+		appId: string,
+		page = 1,
+		limit = 20,
+	): Promise<WorkflowVersionListResponse> {
+		return this.request<WorkflowVersionListResponse>(
+			`/apps/${appId}/workflows?page=${page}&limit=${limit}`,
+		);
+	}
+
+	async restoreWorkflowVersion(
+		appId: string,
+		workflowId: string,
+	): Promise<{ result: string }> {
+		return this.request<{ result: string }>(
+			`/apps/${appId}/workflows/${workflowId}/restore`,
+			{ method: "POST" },
+		);
+	}
+
+	async labelWorkflowVersion(
+		appId: string,
+		workflowId: string,
+		markedName: string,
+		markedComment = "",
+	): Promise<{ result: string }> {
+		return this.request<{ result: string }>(`/apps/${appId}/workflows/${workflowId}`, {
+			method: "PATCH",
+			body: JSON.stringify({ marked_name: markedName, marked_comment: markedComment }),
+		});
+	}
+
+	async publishWorkflowWithLabel(
+		appId: string,
+		markedName?: string,
+		markedComment?: string,
+	): Promise<{ result: string }> {
+		const body: Record<string, string> = {};
+		if (markedName) body.marked_name = markedName;
+		if (markedComment) body.marked_comment = markedComment;
+		return this.request<{ result: string }>(`/apps/${appId}/workflows/publish`, {
+			method: "POST",
+			body: JSON.stringify(body),
+		});
+	}
+
+	// --- Triggers ---
+
+	async listTriggers(appId: string): Promise<WorkflowTriggerListResponse> {
+		return this.request<WorkflowTriggerListResponse>(`/apps/${appId}/triggers`);
+	}
+
+	async setTriggerEnabled(
+		appId: string,
+		triggerId: string,
+		enabled: boolean,
+	): Promise<{ result: string }> {
+		return this.request<{ result: string }>(`/apps/${appId}/trigger-enable`, {
+			method: "POST",
+			body: JSON.stringify({ trigger_id: triggerId, enabled }),
+		});
+	}
+
+	// --- Environment Variables (via workflow draft) ---
+
+	async updateWorkflowDraftWithEnv(
+		appId: string,
+		graph: Record<string, unknown>,
+		features: Record<string, unknown>,
+		hash: string,
+		environmentVariables: Array<{ name: string; value: string; value_type: "string" | "number" | "secret" }>,
+	): Promise<{ result: string }> {
+		return this.request<{ result: string }>(`/apps/${appId}/workflows/draft`, {
+			method: "POST",
+			body: JSON.stringify({
+				graph,
+				features,
+				hash,
+				environment_variables: environmentVariables,
+				conversation_variables: [],
+			}),
+		});
 	}
 }
