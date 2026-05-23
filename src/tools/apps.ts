@@ -6,13 +6,27 @@ export const registerAppTools = (server: McpServer, client: DifyClient) => {
 	server.registerTool(
 		"list_apps",
 		{
-			description: "List all Dify applications",
-			inputSchema: { page: z.number().optional(), limit: z.number().optional() },
+			description:
+				"List Dify applications. Filter by tag IDs, mode (workflow/chat/agent-chat/advanced-chat/completion), or name keyword.",
+			inputSchema: {
+				page: z.number().optional().describe("Page number (default 1)"),
+				limit: z.number().optional().describe("Items per page (default 30)"),
+				tag_ids: z
+					.string()
+					.optional()
+					.describe("Comma-separated tag IDs to filter by, e.g. 'id1,id2'"),
+				mode: z
+					.enum(["workflow", "chat", "agent-chat", "advanced-chat", "completion"])
+					.optional()
+					.describe("Filter by app mode"),
+				name: z.string().optional().describe("Filter by name keyword"),
+			},
 			annotations: { readOnlyHint: true },
 		},
-		async ({ page, limit }) => {
+		async ({ page, limit, tag_ids, mode, name }) => {
 			try {
-				const data = await client.listApps(page ?? 1, limit ?? 30);
+				const tagIdArray = tag_ids ? tag_ids.split(",").map((s) => s.trim()).filter(Boolean) : undefined;
+				const data = await client.listAppsFiltered(page ?? 1, limit ?? 30, tagIdArray, mode, name);
 				const summary = data.data.map((a) => `- ${a.name} (${a.mode}) [${a.id}]`).join("\n");
 				return {
 					content: [{ type: "text", text: `Total: ${data.total}\n\n${summary}` }],
@@ -130,48 +144,6 @@ export const registerAppTools = (server: McpServer, client: DifyClient) => {
 				return {
 					content: [{ type: "text", text: `Updated: ${app.name} (${app.mode}) [${app.id}]` }],
 				};
-			} catch (e) {
-				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
-			}
-		},
-	);
-
-	server.registerTool(
-		"import_dsl",
-		{
-			description: "Import a Dify application from YAML DSL content",
-			inputSchema: {
-				yaml_content: z.string().describe("YAML DSL content defining the application"),
-				name: z.string().optional().describe("Override application name"),
-				description: z.string().optional().describe("Override description"),
-			},
-		},
-		async ({ yaml_content, name, description }) => {
-			try {
-				const result = await client.importDSL(yaml_content, name, description);
-				let text = `Import status: ${result.status}\nApp ID: ${result.app_id || result.id}`;
-				if (result.status === "pending") {
-					const confirmed = await client.confirmImport(result.id);
-					text += `\nConfirmed: ${confirmed.status}, App ID: ${confirmed.app_id}`;
-				}
-				return { content: [{ type: "text", text }] };
-			} catch (e) {
-				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
-			}
-		},
-	);
-
-	server.registerTool(
-		"export_app",
-		{
-			description: "Export a Dify application as YAML DSL",
-			inputSchema: { app_id: z.string().describe("Application ID to export") },
-			annotations: { readOnlyHint: true },
-		},
-		async ({ app_id }) => {
-			try {
-				const result = await client.exportApp(app_id);
-				return { content: [{ type: "text", text: result.data }] };
 			} catch (e) {
 				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
 			}

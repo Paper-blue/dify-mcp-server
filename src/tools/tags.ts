@@ -107,4 +107,47 @@ export const registerTagTools = (server: McpServer, client: DifyClient) => {
 			}
 		},
 	);
+
+	server.registerTool(
+		"batch_bind_tags",
+		{
+			description:
+				"Bind one or more tags to multiple apps or knowledge bases at once. Returns per-target success/failure summary.",
+			inputSchema: {
+				tag_ids: z.string().describe('JSON array of tag IDs, e.g. ["tag1","tag2"]'),
+				target_ids: z.string().describe('JSON array of target IDs (app or dataset), e.g. ["app1","app2"]'),
+				type: z.enum(["app", "knowledge"]).describe("Target type"),
+			},
+			annotations: { idempotentHint: true },
+		},
+		async ({ tag_ids, target_ids, type }) => {
+			try {
+				const parsedTagIds: string[] = JSON.parse(tag_ids);
+				const parsedTargetIds: string[] = JSON.parse(target_ids);
+				const results: string[] = [];
+				let successCount = 0;
+				let failCount = 0;
+				for (const targetId of parsedTargetIds) {
+					try {
+						await client.bindTag(parsedTagIds, targetId, type);
+						results.push(`✓ ${targetId}`);
+						successCount++;
+					} catch (e) {
+						results.push(`✗ ${targetId}: ${(e as Error).message}`);
+						failCount++;
+					}
+				}
+				return {
+					content: [
+						{
+							type: "text",
+							text: `Batch bind: ${successCount} succeeded, ${failCount} failed\n\n${results.join("\n")}`,
+						},
+					],
+				};
+			} catch (e) {
+				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
+			}
+		},
+	);
 };

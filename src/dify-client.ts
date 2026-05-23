@@ -29,6 +29,7 @@ import type {
 	WorkflowNodeExecutionListResponse,
 	WorkflowNodeRunResult,
 	WorkflowRun,
+	WorkflowRunCount,
 	WorkflowRunListResponse,
 	WorkflowTrigger,
 	WorkflowTriggerListResponse,
@@ -793,6 +794,7 @@ export class DifyClient {
 		features: Record<string, unknown>,
 		hash: string,
 		environmentVariables: Array<{ name: string; value: string; value_type: "string" | "number" | "secret" }>,
+		conversationVariables: Array<{ name: string; value: string; value_type: string }> = [],
 	): Promise<{ result: string }> {
 		return this.request<{ result: string }>(`/apps/${appId}/workflows/draft`, {
 			method: "POST",
@@ -801,8 +803,69 @@ export class DifyClient {
 				features,
 				hash,
 				environment_variables: environmentVariables,
-				conversation_variables: [],
+				conversation_variables: conversationVariables,
 			}),
 		});
+	}
+
+	// --- Iteration / Loop Node Debug ---
+
+	async runIterationNode(
+		appId: string,
+		nodeId: string,
+		inputs: Record<string, unknown> = {},
+	): Promise<WorkflowNodeRunResult> {
+		return this.request<WorkflowNodeRunResult>(
+			`/apps/${appId}/workflows/draft/iteration/nodes/${nodeId}/run`,
+			{
+				method: "POST",
+				body: JSON.stringify({ inputs, query: "", files: [] }),
+			},
+		);
+	}
+
+	async runLoopNode(
+		appId: string,
+		nodeId: string,
+		inputs: Record<string, unknown> = {},
+	): Promise<WorkflowNodeRunResult> {
+		return this.request<WorkflowNodeRunResult>(
+			`/apps/${appId}/workflows/draft/loop/nodes/${nodeId}/run`,
+			{
+				method: "POST",
+				body: JSON.stringify({ inputs, query: "", files: [] }),
+			},
+		);
+	}
+
+	async getWorkflowRunCount(
+		appId: string,
+		status?: string,
+		timeRange?: string,
+	): Promise<WorkflowRunCount> {
+		let url = `/apps/${appId}/workflow-runs/count`;
+		const params: string[] = [];
+		if (status) params.push(`status=${status}`);
+		if (timeRange) params.push(`time_range=${timeRange}`);
+		if (params.length > 0) url += `?${params.join("&")}`;
+		return this.request<WorkflowRunCount>(url);
+	}
+
+	// --- listApps with filters ---
+
+	async listAppsFiltered(
+		page = 1,
+		limit = 30,
+		tagIds?: string[],
+		mode?: string,
+		name?: string,
+	): Promise<AppListResponse> {
+		const params: string[] = [`page=${page}`, `limit=${limit}`];
+		if (tagIds && tagIds.length > 0) {
+			for (const id of tagIds) params.push(`tag_ids[]=${encodeURIComponent(id)}`);
+		}
+		if (mode) params.push(`mode=${encodeURIComponent(mode)}`);
+		if (name) params.push(`name=${encodeURIComponent(name)}`);
+		return this.request<AppListResponse>(`/apps?${params.join("&")}`);
 	}
 }

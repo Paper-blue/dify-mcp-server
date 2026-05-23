@@ -114,9 +114,15 @@ export const registerWorkflowVersionTools = (server: McpServer, client: DifyClie
 					.describe(
 						'JSON array of env vars: [{"name":"MY_KEY","value":"secret","value_type":"secret"},{"name":"BASE_URL","value":"https://...","value_type":"string"}]',
 					),
+				conversation_vars: z
+					.string()
+					.optional()
+					.describe(
+						'JSON array of conversation variables: [{"name":"history","value":"","value_type":"string"}]',
+					),
 			},
 		},
-		async ({ app_id, graph, features, hash, env_vars }) => {
+		async ({ app_id, graph, features, hash, env_vars, conversation_vars }) => {
 			try {
 				const result = await client.updateWorkflowDraftWithEnv(
 					app_id,
@@ -124,6 +130,7 @@ export const registerWorkflowVersionTools = (server: McpServer, client: DifyClie
 					JSON.parse(features),
 					hash,
 					JSON.parse(env_vars),
+					conversation_vars ? JSON.parse(conversation_vars) : [],
 				);
 				return {
 					content: [{ type: "text", text: `Updated: ${result.result}` }],

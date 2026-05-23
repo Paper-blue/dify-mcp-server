@@ -310,3 +310,13 @@ export interface WorkflowTrigger {
 export interface WorkflowTriggerListResponse {
 	data: WorkflowTrigger[];
 }
+
+// --- Workflow Run Count ---
+
+export interface WorkflowRunCount {
+	total: number;
+	running: number;
+	succeeded: number;
+	failed: number;
+	stopped: number;
+}

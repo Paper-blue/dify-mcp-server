@@ -99,6 +99,78 @@ export const registerWorkflowDebugTools = (server: McpServer, client: DifyClient
 	);
 
 	server.registerTool(
+		"run_iteration_node",
+		{
+			description:
+				"Debug a single Iteration node in the draft workflow. Returns inputs, outputs, status, and elapsed time.",
+			inputSchema: {
+				app_id: z.string().describe("Application ID"),
+				node_id: z.string().describe("Iteration node ID (from get_workflow nodes[].id)"),
+				inputs: z.string().optional().describe("JSON string of node input variables"),
+			},
+		},
+		async ({ app_id, node_id, inputs }) => {
+			try {
+				const parsedInputs = inputs ? JSON.parse(inputs) : {};
+				const result = await client.runIterationNode(app_id, node_id, parsedInputs);
+				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+			} catch (e) {
+				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
+			}
+		},
+	);
+
+	server.registerTool(
+		"run_loop_node",
+		{
+			description:
+				"Debug a single Loop node in the draft workflow. Returns inputs, outputs, status, and elapsed time.",
+			inputSchema: {
+				app_id: z.string().describe("Application ID"),
+				node_id: z.string().describe("Loop node ID (from get_workflow nodes[].id)"),
+				inputs: z.string().optional().describe("JSON string of node input variables"),
+			},
+		},
+		async ({ app_id, node_id, inputs }) => {
+			try {
+				const parsedInputs = inputs ? JSON.parse(inputs) : {};
+				const result = await client.runLoopNode(app_id, node_id, parsedInputs);
+				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+			} catch (e) {
+				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
+			}
+		},
+	);
+
+	server.registerTool(
+		"get_workflow_run_count",
+		{
+			description:
+				"Get workflow run statistics (total, running, succeeded, failed, stopped). Filter by status or time range.",
+			inputSchema: {
+				app_id: z.string().describe("Application ID"),
+				status: z
+					.enum(["running", "succeeded", "failed", "stopped", "partial-succeeded"])
+					.optional()
+					.describe("Filter by status"),
+				time_range: z
+					.string()
+					.optional()
+					.describe("Time range filter, e.g. '7d', '4h', '30m'"),
+			},
+			annotations: { readOnlyHint: true },
+		},
+		async ({ app_id, status, time_range }) => {
+			try {
+				const result = await client.getWorkflowRunCount(app_id, status, time_range);
+				return { content: [{ type: "text", text: JSON.stringify(result, null, 2) }] };
+			} catch (e) {
+				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
+			}
+		},
+	);
+
+	server.registerTool(
 		"stop_workflow_task",
 		{
 			description: "Stop a running workflow task by task ID.",
