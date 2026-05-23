@@ -2,6 +2,7 @@ import type { McpServer } from "@modelcontextprotocol/sdk/server/mcp.js";
 import type { DifyClient } from "../dify-client.js";
 import { registerAppTools } from "./apps.js";
 import { registerAppDslTools } from "./app-dsl.js";
+import { registerAppAccessTools } from "./app-access.js";
 import { registerConversationTools } from "./conversations.js";
 import { registerKnowledgeTools } from "./knowledge.js";
 import { registerMcpServerTools } from "./mcp-servers.js";
@@ -17,6 +18,7 @@ import { registerWorkflowTriggerTools } from "./workflow-triggers.js";
 export const registerTools = (server: McpServer, client: DifyClient) => {
 	registerAppTools(server, client);
 	registerAppDslTools(server, client);
+	registerAppAccessTools(server, client);
 	registerWorkflowTools(server, client);
 	registerWorkflowDebugTools(server, client);
 	registerWorkflowRunTools(server, client);

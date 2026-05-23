@@ -259,6 +259,30 @@ export class DifyClient {
 		);
 	}
 
+	async deleteAppApiKey(appId: string, keyId: string): Promise<{ result: string }> {
+		return this.request<{ result: string }>(`/apps/${appId}/api-keys/${keyId}`, {
+			method: "DELETE",
+		});
+	}
+
+	async getSiteConfig(appId: string): Promise<Record<string, unknown>> {
+		return this.request<Record<string, unknown>>(`/apps/${appId}/site`);
+	}
+
+	async updateSiteConfig(
+		appId: string,
+		config: Record<string, unknown>,
+	): Promise<Record<string, unknown>> {
+		return this.request<Record<string, unknown>>(`/apps/${appId}/site`, {
+			method: "POST",
+			body: JSON.stringify(config),
+		});
+	}
+
+	async getAppAccessMode(appId: string): Promise<{ access_mode: string }> {
+		return this.request<{ access_mode: string }>(`/apps/${appId}/access-mode`);
+	}
+
 	// --- Knowledge Base (Datasets) ---
 
 	async listDatasets(page = 1, limit = 30): Promise<DatasetListResponse> {
