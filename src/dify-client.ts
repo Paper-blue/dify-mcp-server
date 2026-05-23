@@ -126,17 +126,30 @@ export class DifyClient {
 			throw new Error("DIFY_EMAIL and DIFY_PASSWORD env vars required");
 		}
 
-		const passwordB64 = Buffer.from(this.password).toString("base64");
-
-		const data = await this.rawRequest<LoginResponse>("/login", {
-			method: "POST",
-			body: JSON.stringify({
-				email: this.email,
-				password: passwordB64,
-				language: "en-US",
-				remember_me: true,
-			}),
-		});
+		// Try plaintext first; fall back to base64 for Dify versions that require it.
+		let data: LoginResponse;
+		try {
+			data = await this.rawRequest<LoginResponse>("/login", {
+				method: "POST",
+				body: JSON.stringify({
+					email: this.email,
+					password: this.password,
+					language: "en-US",
+					remember_me: true,
+				}),
+			});
+		} catch {
+			const passwordB64 = Buffer.from(this.password).toString("base64");
+			data = await this.rawRequest<LoginResponse>("/login", {
+				method: "POST",
+				body: JSON.stringify({
+					email: this.email,
+					password: passwordB64,
+					language: "en-US",
+					remember_me: true,
+				}),
+			});
+		}
 
 		const hasAccessToken = Array.from(this.cookies.keys()).some((k) => k.endsWith("access_token"));
 		if (data.result === "success" || hasAccessToken) {
@@ -227,12 +240,18 @@ export class DifyClient {
 		});
 	}
 
-	async enableApi(appId: string): Promise<{ result: string }> {
-		return this.request<{ result: string }>(`/apps/${appId}/api-enable`, { method: "POST" });
+	async enableApi(appId: string): Promise<App> {
+		return this.request<App>(`/apps/${appId}/api-enable`, {
+			method: "POST",
+			body: JSON.stringify({ enable_api: true }),
+		});
 	}
 
-	async enableSite(appId: string): Promise<{ result: string }> {
-		return this.request<{ result: string }>(`/apps/${appId}/site-enable`, { method: "POST" });
+	async enableSite(appId: string): Promise<App> {
+		return this.request<App>(`/apps/${appId}/site-enable`, {
+			method: "POST",
+			body: JSON.stringify({ enable_site: true }),
+		});
 	}
 
 	async copyApp(appId: string, name?: string): Promise<App> {
@@ -266,7 +285,8 @@ export class DifyClient {
 	}
 
 	async getSiteConfig(appId: string): Promise<Record<string, unknown>> {
-		return this.request<Record<string, unknown>>(`/apps/${appId}/site`);
+		const app = await this.request<Record<string, unknown>>(`/apps/${appId}`);
+		return (app.site as Record<string, unknown>) ?? app;
 	}
 
 	async updateSiteConfig(
@@ -280,7 +300,8 @@ export class DifyClient {
 	}
 
 	async getAppAccessMode(appId: string): Promise<{ access_mode: string }> {
-		return this.request<{ access_mode: string }>(`/apps/${appId}/access-mode`);
+		const app = await this.request<{ access_mode: string }>(`/apps/${appId}`);
+		return { access_mode: app.access_mode };
 	}
 
 	// --- Knowledge Base (Datasets) ---
@@ -503,11 +524,15 @@ export class DifyClient {
 		icon?: string,
 		iconBackground?: string,
 	): Promise<App> {
-		const body: Record<string, string> = {};
-		if (name) body.name = name;
-		if (description !== undefined) body.description = description;
-		if (icon) body.icon = icon;
-		if (iconBackground) body.icon_background = iconBackground;
+		const current = await this.getApp(appId);
+		const body: Record<string, unknown> = {
+			name: name ?? current.name,
+			description: description !== undefined ? description : (current.description || ""),
+			icon: icon ?? current.icon,
+			icon_background: iconBackground ?? current.icon_background,
+			icon_type: current.icon_type ?? "emoji",
+			use_icon_as_answer_icon: false,
+		};
 		return this.request<App>(`/apps/${appId}`, {
 			method: "PUT",
 			body: JSON.stringify(body),

@@ -160,7 +160,7 @@ export const registerAppTools = (server: McpServer, client: DifyClient) => {
 		async ({ app_id }) => {
 			try {
 				const result = await client.enableApi(app_id);
-				return { content: [{ type: "text", text: `API enabled: ${result.result}` }] };
+				return { content: [{ type: "text", text: `API enabled: ${result.enable_api}` }] };
 			} catch (e) {
 				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
 			}
@@ -177,7 +177,7 @@ export const registerAppTools = (server: McpServer, client: DifyClient) => {
 		async ({ app_id }) => {
 			try {
 				const result = await client.enableSite(app_id);
-				return { content: [{ type: "text", text: `Site enabled: ${result.result}` }] };
+				return { content: [{ type: "text", text: `Site enabled: ${result.enable_site}` }] };
 			} catch (e) {
 				return { isError: true, content: [{ type: "text", text: (e as Error).message }] };
 			}

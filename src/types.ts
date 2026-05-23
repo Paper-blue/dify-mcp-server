@@ -114,6 +114,10 @@ export interface App {
 	updated_at: number;
 	icon: string;
 	icon_background: string;
+	icon_type?: string;
+	access_mode?: string;
+	enable_api?: boolean;
+	enable_site?: boolean;
 }
 
 export interface AppListResponse {
