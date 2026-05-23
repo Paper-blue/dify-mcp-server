@@ -86,22 +86,44 @@ export class DifyClient {
 			headers["X-CSRF-Token"] = this.csrfToken;
 		}
 
-		const res = await fetch(`${this.baseUrl}/console/api${path}`, {
-			...options,
-			headers,
-			redirect: "manual",
-		});
+		// Retry transient network failures (connect timeout, dropped connection, 5xx)
+		// which this instance exhibits intermittently. Auth/4xx errors are not retried.
+		let lastErr: unknown;
+		for (let attempt = 0; attempt < 3; attempt++) {
+			try {
+				const res = await fetch(`${this.baseUrl}/console/api${path}`, {
+					...options,
+					headers,
+					redirect: "manual",
+				});
 
-		this.parseCookies(res);
+				this.parseCookies(res);
 
-		if (!res.ok) {
-			const body = await res.text();
-			throw new Error(`Dify API ${res.status}: ${body}`);
+				if (!res.ok) {
+					const body = await res.text();
+					if (res.status >= 500 && attempt < 2) {
+						lastErr = new Error(`Dify API ${res.status}: ${body}`);
+						await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+						continue;
+					}
+					throw new Error(`Dify API ${res.status}: ${body}`);
+				}
+
+				const text = await res.text();
+				if (!text) return { result: "success" } as T;
+				return JSON.parse(text) as T;
+			} catch (e) {
+				// Network-level failure (e.g. UND_ERR_CONNECT_TIMEOUT, fetch failed)
+				const isNetwork = e instanceof Error && /fetch failed|timeout|ECONN|network/i.test(e.message);
+				if (isNetwork && attempt < 2) {
+					lastErr = e;
+					await new Promise((r) => setTimeout(r, 1500 * (attempt + 1)));
+					continue;
+				}
+				throw e;
+			}
 		}
-
-		const text = await res.text();
-		if (!text) return { result: "success" } as T;
-		return JSON.parse(text) as T;
+		throw lastErr instanceof Error ? lastErr : new Error("Request failed after retries");
 	}
 
 	private async request<T>(path: string, options: RequestInit = {}): Promise<T> {
@@ -227,10 +249,18 @@ export class DifyClient {
 		graph: Record<string, unknown>,
 		features: Record<string, unknown>,
 		hash: string,
+		environmentVariables: unknown[] = [],
+		conversationVariables: unknown[] = [],
 	): Promise<{ result: string }> {
 		return this.request<{ result: string }>(`/apps/${appId}/workflows/draft`, {
 			method: "POST",
-			body: JSON.stringify({ graph, features, hash }),
+			body: JSON.stringify({
+				graph,
+				features,
+				hash,
+				environment_variables: environmentVariables,
+				conversation_variables: conversationVariables,
+			}),
 		});
 	}
 
@@ -943,7 +973,7 @@ export class DifyClient {
 			`/workspaces/current/model-providers/${provider}/credentials`,
 			{
 				method: "POST",
-				body: JSON.stringify(credentials),
+				body: JSON.stringify({ credentials }),
 			},
 		);
 	}
@@ -956,7 +986,7 @@ export class DifyClient {
 			`/workspaces/current/model-providers/${provider}/credentials/validate`,
 			{
 				method: "POST",
-				body: JSON.stringify(credentials),
+				body: JSON.stringify({ credentials }),
 			},
 		);
 	}

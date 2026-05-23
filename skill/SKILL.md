@@ -220,6 +220,78 @@ Dify PUT /apps/{id} 要求 `use_icon_as_answer_icon` 和 `icon_type` 字段，cl
 
 ---
 
+## DSL 编排实战避坑（重要）
+
+> 以下是通过 import_dsl 程序化构建 workflow 时踩过的坑，全部已验证。手搓 DSL 时必看。
+
+### ⚠️ 节点 id 绝对不能含连字符
+变量引用 `{{#node_id.field#}}` 中，如果 `node_id` 含连字符（如 `code-parse`），Dify 运行时**不会解析该变量**，会把字面 `{{#code-parse.news_text#}}` 当普通文本发给 LLM/下游。
+- ❌ `code-parse`、`http-get-used` → 变量注入失效
+- ✅ `code_parse`、`parse_news`、`mycode` → 正常解析
+- **规则**：节点 id 一律用下划线或纯字母数字。
+
+### ⚠️ 变量引用语法是 `{{#node_id.field#}}`
+不是 `{{var}}`（那是 chatflow 用户输入变量）。节点间传值必须用 `{{#node_id.output_field#}}`，且节点 id 无连字符（见上）。已验证 start 输入变量、code 输出、http body 都用这个语法。
+
+### ⚠️ update_workflow（draft）必须带 env/conversation 变量
+POST `/apps/{id}/workflows/draft` 这个 Dify 版本强制要求 body 含 `environment_variables` 和 `conversation_variables`（可为空数组），否则 400 "Missing required parameter"。client 的 `updateWorkflowDraft` 已默认补空数组。
+
+### ⚠️ 程序化注入 Code 节点：用 YAML 块标量或 chr(10)
+Python code 含正则（如 `\[CDATA\[`）和换行时：
+- **YAML 导入**：必须用块标量 `code: |-`（缩进保留），**不要**用双引号字符串 `code: "import re\n..."`——双引号里 `\[` 是非法 YAML 转义符，且 `\n` 易出错。
+- **通过 client API 注入**（updateWorkflowDraft 改 graph）：字符串拼接换行用 `chr(10).join()` 而非 `'\n'.join()`，避免 JS→JSON→Python 多层转义把 `\n` 变成真换行破坏 Python 字符串。
+
+### ⚠️ HTTP 节点抓 RSS 需加 User-Agent
+量子位/InfoQ/开源中国/虎嗅等源不带 UA 会返回 403/451/000。在 HTTP 节点 `headers` 加 `User-Agent:Mozilla/5.0 ...`。已验证加 UA 后 18 个 RSS 源全部 200。
+- 虎嗅 RSS URL 已变更：用 `https://www.huxiu.com/rss/`（旧的 `/rss/0.xml` 失效）。
+
+### ⚠️ 外部 KV 去重（Upstash Redis REST）
+Dify 无持久化存储，跨次运行去重需外挂 KV。用 Upstash Redis REST API：
+- **bearer auth**：HTTP 节点 authorization 用 `{type:'api-key', config:{type:'bearer', api_key:'<token不带Bearer前缀>', header:'Authorization'}}`。**config.api_key 里不要再写 `Bearer `**，否则变成 `Bearer Bearer xxx` 报 WRONGPASS。
+- **批量命令**：POST `/pipeline`，body 为 raw-text `[["EXISTS","topic:uid1"],["SET","topic:uid2","1","EX","2592000"]]`，返回 `[{"result":0},{"result":"OK"}]`。
+- **去重模式**：解析后 Code 构造 EXISTS pipeline → HTTP 查 → Code 过滤已存在的 → LLM 选 → Code 构造 SET pipeline（带 `EX` 过期秒数）→ HTTP 写。
+
+### ⚠️ 模型提供商：插件化 provider 配置
+新版 Dify 模型走插件。配置 OpenRouter 等：
+1. 从 marketplace 查标识：`POST https://marketplace.dify.ai/api/v1/plugins/search/advanced` body `{query:"openrouter",type:"plugin"}`，取 `latest_package_identifier`。
+2. 安装：`installPluginFromMarketplace([identifier])`（异步，等几秒后 `listPlugins` 确认）。
+3. 配置 credentials：`configureModelProvider('langgenius/openrouter/openrouter', {api_key:'sk-or-...'})`——**body 必须是 `{credentials:{...}}` 包装**（client 已修正）。provider 名格式 `langgenius/openrouter/openrouter`（org/plugin/provider）。
+4. LLM 节点 model 写 `{provider:'langgenius/openrouter/openrouter', name:'deepseek/deepseek-v4-pro', mode:'chat', completion_params:{...}}`。
+
+### ⚠️ 实例网络抖动需重试
+Zeabur 托管实例偶发 connect timeout（UND_ERR_CONNECT_TIMEOUT）和间歇 401。client 的 `rawRequest` 已加网络层重试（fetch failed/timeout/5xx 自动重试 3 次）。脚本里调用仍建议外层 retry 包装登录。
+
+### LLM 输出清洗
+DeepSeek 等模型可能输出 `<think>...</think>` 块和 markdown 代码块。后续 Code 节点解析 JSON 前要：去 think 块 `re.sub(r'<think>.*?</think>','',s,flags=re.DOTALL)`、去 ``` 标记、用非贪婪正则 `\[\s*\{.*\}\s*\]` 提取 JSON 数组。建议在 workflow 末尾加一个 finalize Code 节点统一清洗所有 LLM 输出，让本地拿到干净结果。
+
+### ⚠️ HTTP 节点 params/headers 必须真换行（否则 422）
+HTTP 节点的 `params` 和 `headers` 字段是**多行字符串，每行一个键值对 `key:value`，用真换行分隔**。
+- ❌ 用 `'q:xxx\\ncount:5'`（字面 `\n`）→ Dify 把整串当一个畸形 key → 422 错误。
+- ✅ YAML 里用块标量 `params: |-` 缩进多行，每行一个 `key:value`。
+- 单行 header（如只有一个 UA）用单引号字符串没问题；多行必须块标量。
+
+### Brave 图片搜索（全网真实配图）
+全网搜图比 Pexels/Unsplash 库存图相关性强。HTTP GET `https://api.search.brave.com/res/v1/images/search`：
+- headers（块标量）：`Accept:application/json` + `X-Subscription-Token:<BSA...key>`
+- params（块标量）：`q:{{#上游.关键词#}}` + `count:5` + `safesearch:strict`
+- 返回 `results[].properties.url`（原图）或 `results[].thumbnail.src`（缩略图），`results[].source` 是来源域名。
+- **版权处理**：Code 节点按 source 过滤——优先 reuters/wikipedia/apnews/官方/edu/gov，避开 pinterest/reddit/quora。全网图仍有版权风险，发布前需人工把关。
+- **配图链路模式**：写完文章 → LLM 提 N 个英文关键词(JSON数组) → Code 拆成 q1..qN → N 个 Brave HTTP 节点串接（各取一个 query）→ Code 挑可用源图 URL。
+
+### ⚠️ updateWorkflowDraft 会清空环境变量
+用 client 的 `updateWorkflowDraft(appId, graph, features, hash)` 改 graph 时，若不显式传 `environmentVariables`，会用默认空数组**覆盖掉原有环境变量**（如 narrative_dna 会丢，导致 LLM 节点报 `Variable #env.xxx# not found`）。改 graph 前先 `getWorkflowDraft` 读出 `environment_variables` 再原样传回。最稳妥：用生成器一次性生成完整 YAML（含 env）重新 import，避免增量 patch。
+
+### ⚠️ SSE 长连接易超时，节点多时改查结果
+节点多的 workflow（如写作+多图搜索）整体运行耗时长，`run_draft_workflow` 的 SSE 长连接在本地易被 ETIMEDOUT/terminated 掐断。应对：
+- SSE 读取加 try/catch，断了也解析已收到的事件（`workflow_finished` 通常在断连前已到）。
+- 或发布后用公开 API blocking 模式（但同样可能超 Dify 网关超时）。
+- 单节点调试 `run_draft_node` 的变量注入不可靠（手动传 `{node.field: val}` 常 422），优先整体跑看 `node_finished` 事件。
+
+### Code 节点输出类型严格校验
+Code 节点 `outputs` 声明的类型必须和 return 的值类型严格一致。如声明 `audit_passed: {type: string}` 但 return `bool` → 报 `Output X must be a string, got bool`。bool 要转成 `'true'/'false'` 字符串，数组/对象转 JSON 字符串。
+
+---
+
 ## Dify Console API 端点参考
 
 所有请求走 `/console/api/` 前缀，cookie 认证。
